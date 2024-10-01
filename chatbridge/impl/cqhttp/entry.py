@@ -9,26 +9,12 @@ from chatbridge.core.client import ChatBridgeClient
 from chatbridge.core.network.protocol import ChatPayload, CommandPayload, CustomPayload
 from chatbridge.impl import utils
 from chatbridge.impl.cqhttp.config import CqHttpConfig
+from chatbridge.impl.cqhttp.copywritings import CQHelpMessage, StatsHelpMessage
 from chatbridge.impl.tis.protocol import StatsQueryResult, OnlineQueryResult
 
 ConfigFile = 'ChatBridge_CQHttp.json'
 cq_bot: Optional['CQBot'] = None
 chatClient: Optional['CqHttpChatBridgeClient'] = None
-
-CQHelpMessage = '''
-!!help: 显示本条帮助信息
-!!ping: pong!!
-!!mc <消息>: 向 MC 中发送聊天信息 <消息>
-!!online: 显示正版通道在线列表
-!!stats <类别> <内容> [<-bot>]: 查询统计信息 <类别>.<内容> 的排名
-'''.strip()
-StatsHelpMessage = '''
-!!stats <类别> <内容> [<-bot>]
-添加 `-bot` 来列出 bot
-例子:
-!!stats used diamond_pickaxe
-!!stats custom time_since_rest -bot
-'''.strip()
 
 
 class CQBot(websocket.WebSocketApp):
@@ -52,7 +38,7 @@ class CQBot(websocket.WebSocketApp):
 				return
 			data = json.loads(message)
 			if data.get('post_type') == 'message' and data.get('message_type') == 'group':
-				if data['anonymous'] is None and data['group_id'] == self.config.react_group_id:
+				if data.get('anonymous') is None and data['group_id'] == self.config.react_group_id:
 					self.logger.info('QQ chat message: {}'.format(data))
 					args = data['raw_message'].split(' ')
 
@@ -74,6 +60,11 @@ class CQBot(websocket.WebSocketApp):
 
 					if len(args) == 1 and args[0] == '!!online':
 						self.logger.info('!!online command triggered')
+						if not self.config.client_to_query_online:
+							self.logger.info('!!online command is not enabled')
+							self.send_text('!!online 指令未启用')
+							return
+
 						if chatClient.is_online():
 							command = args[0]
 							client = self.config.client_to_query_online
@@ -84,6 +75,11 @@ class CQBot(websocket.WebSocketApp):
 
 					if len(args) >= 1 and args[0] == '!!stats':
 						self.logger.info('!!stats command triggered')
+						if not self.config.client_to_query_stats:
+							self.logger.info('!!stats command is not enabled')
+							self.send_text('!!stats 指令未启用')
+							return
+
 						command = '!!stats rank ' + ' '.join(args[1:])
 						if len(args) == 0 or len(args) - int(command.find('-bot') != -1) != 3:
 							self.send_text(StatsHelpMessage)
@@ -184,6 +180,7 @@ def main():
 	config = utils.load_config(ConfigFile, CqHttpConfig)
 	chatClient = CqHttpChatBridgeClient.create(config)
 	utils.start_guardian(chatClient)
+	utils.register_exit_on_termination()
 	print('Starting CQ Bot')
 	cq_bot = CQBot(config)
 	cq_bot.start()

@@ -1,3 +1,4 @@
+import sys
 import threading
 import time
 import traceback
@@ -46,6 +47,9 @@ class CLIServer(ChatBridgeServer):
 	def console_loop(self):
 		while self.is_running():
 			text = input()
+			if len(text) == 0:
+				continue
+
 			self.logger.info('Processing user input "{}"'.format(text))
 			if text == 'stop':
 				self.stop()
@@ -87,7 +91,12 @@ def main():
 		print('- Client #{}: name = {}, password = {}'.format(i + 1, client_info.name, client_info.password))
 		server.add_client(client_info)
 	server.start()
-	server.console_loop()
+
+	if sys.stdin.isatty():
+		server.console_loop()
+	else:
+		utils.wait_until_terminate()
+		server.stop()
 
 
 if __name__ == '__main__':
